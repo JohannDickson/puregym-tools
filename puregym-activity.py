@@ -26,7 +26,7 @@ CSV_HEADER  = "Timestamp,People"
 
 logformat = "%(levelname)s - %(message)s"
 formatter = logging.Formatter(logformat)
-log = logging.getLogger("purgeym")
+log = logging.getLogger("puregym")
 log.setLevel(logging.WARN)
 ch = logging.StreamHandler()
 ch.setFormatter(formatter)
