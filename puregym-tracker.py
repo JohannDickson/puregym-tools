@@ -7,6 +7,7 @@ import re
 import requests
 from lxml import html
 from datetime import datetime
+from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 
 LOGIN_PAGE      = 'https://www.puregym.com/Login/'
 LOGOUT_PAGE     = 'https://www.puregym.com/logout/'
@@ -15,6 +16,8 @@ MEMBERS_PAGE    = 'https://www.puregym.com/members/'
 
 EMAIL       = os.getenv("PUREGYM_EMAIL")
 PIN         = os.getenv("PUREGYM_PIN")
+
+PUSHGATEWAY = os.getenv("PUREGYM_PUSHGATEWAY")
 
 LOGS        = "/tmp/"
 MAIN_LOG    = os.path.join(LOGS, "puregym.log")
@@ -33,6 +36,7 @@ log.addHandler(ch)
 
 def main():
     log.debug("START: %s" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+    registry = CollectorRegistry()
     with requests.Session() as s:
 
         log.debug("====== Retrieving login page")
@@ -110,6 +114,20 @@ def main():
             except:
                 log.critical("Failed to write stats to file")
                 log.critical(now, gym_people)
+                raise
+
+            if PUSHGATEWAY is not None:
+                log.debug("Sending metrics to Prometheus: %s", PUSHGATEWAY)
+                try:
+                    g = Gauge('puregym_people', "Number of people in PureGym", ["gym","gym_nice"], registry=registry)
+                    g.labels(gym=gym_ref, gym_nice=gym_nice).set(gym_people)
+                    push_to_gateway(PUSHGATEWAY, job='puregym', registry=registry)
+
+                except:
+                    log.critical("Could not update Prometheus: %s", PUSHGATEWAY)
+                    raise
+            else:
+                log.debug("No Pushgateway set")
 
         else:
             log.warn("Couldn't identify gym people :(")
