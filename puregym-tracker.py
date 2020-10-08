@@ -7,7 +7,7 @@ import re
 import requests
 from lxml import html
 from datetime import datetime
-from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
+from prometheus_client import CollectorRegistry, Gauge, Summary, push_to_gateway
 
 LOGIN_PAGE      = 'https://www.puregym.com/Login/'
 LOGOUT_PAGE     = 'https://www.puregym.com/logout/'
@@ -17,7 +17,9 @@ MEMBERS_PAGE    = 'https://www.puregym.com/members/'
 EMAIL       = os.getenv("PUREGYM_EMAIL")
 PIN         = os.getenv("PUREGYM_PIN")
 
-PUSHGATEWAY = os.getenv("PUREGYM_PUSHGATEWAY")
+PUSHGATEWAY  = os.getenv("PUREGYM_PUSHGATEWAY")
+registry     = CollectorRegistry()
+job_duration = Summary('puregym_job_duration', 'Time spent finding number of people', registry=registry)
 
 LOGS        = "/tmp/"
 MAIN_LOG    = os.path.join(LOGS, "puregym.log")
@@ -34,9 +36,9 @@ ch = logging.StreamHandler()
 ch.setFormatter(formatter)
 log.addHandler(ch)
 
+@job_duration.time()
 def main():
     log.debug("START: %s" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-    registry = CollectorRegistry()
     with requests.Session() as s:
 
         log.debug("====== Retrieving login page")
@@ -105,8 +107,12 @@ def main():
         if len(rex) == 1 and int(rex[0])>=0:
             gym_people = rex[0]
             log.info("There are %s people in %s", gym_people, gym_nice)
+            people = Gauge('puregym_people', "Number of people in PureGym", ["gym","gym_nice"], registry=registry)
+            people.labels(gym=gym_ref, gym_nice=gym_nice).set(gym_people)
 
             now = datetime.now(pytz.timezone('Europe/London')).strftime('%Y-%m-%d %H:%M:%S')
+            success = Gauge('puregym_last_success', "Epoch of last success", ["gym","gym_nice"], registry=registry)
+            success.labels(gym=gym_ref, gym_nice=gym_nice).set_to_current_time()
             try:
                 with open(LOGS+'/puregym.csv','a') as f:
                     f.write(now+','+str(gym_people)+"\n")
@@ -115,19 +121,6 @@ def main():
                 log.critical("Failed to write stats to file")
                 log.critical(now, gym_people)
                 raise
-
-            if PUSHGATEWAY is not None:
-                log.debug("Sending metrics to Prometheus: %s", PUSHGATEWAY)
-                try:
-                    g = Gauge('puregym_people', "Number of people in PureGym", ["gym","gym_nice"], registry=registry)
-                    g.labels(gym=gym_ref, gym_nice=gym_nice).set(gym_people)
-                    push_to_gateway(PUSHGATEWAY, job='puregym', registry=registry)
-
-                except:
-                    log.critical("Could not update Prometheus: %s", PUSHGATEWAY)
-                    raise
-            else:
-                log.debug("No Pushgateway set")
 
         else:
             log.warn("Couldn't identify gym people :(")
@@ -141,3 +134,12 @@ def main():
 
 if __name__ == '__main__':
     main()
+    if PUSHGATEWAY is not None:
+        log.debug("Sending metrics to Prometheus: %s", PUSHGATEWAY)
+        try:
+            push_to_gateway(PUSHGATEWAY, job='puregym', registry=registry)
+        except:
+            log.critical("Could not update Prometheus: %s", PUSHGATEWAY)
+            raise
+    else:
+        log.debug("No Pushgateway set")
