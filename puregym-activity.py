@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 
 LOGIN_PAGE      = 'https://www.puregym.com/Login/'
 LOGOUT_PAGE     = 'https://www.puregym.com/logout/'
-LOGIN_API       = 'https://www.puregym.com/api/members/login'
 MEMBERS_PAGE    = 'https://www.puregym.com/members/'
 ACTIVITY_PAGE   = 'https://www.puregym.com/members/activity'
 
@@ -60,15 +59,30 @@ def main():
 
 
         log.debug("====== Logging in")
-        log.debug(LOGIN_API)
-        lr = s.post(LOGIN_API,
-                headers={'__requestverificationtoken': tok},
-                data={'email': EMAIL, 'pin': PIN},
+        # Here we post the data back to the same page
+        # Instead of to a login api
+        log.debug(l.url)
+        lr = s.post(l.url,
+                data={
+                    'username': EMAIL,
+                    'password': PIN,
+                    '__RequestVerificationToken': tok
+                },
             )
         log.debug(lr.status_code)
         if lr.status_code != 200:
             log.critical("Failed to log in")
             log.critical(lr.status_code)
+            return
+        ## OIDC
+        form = html.fromstring(lr.text).forms[0]
+        la = s.post(form.action,
+                data=form.form_values(),
+            )
+        log.debug(la.status_code)
+        if la.status_code != 200:
+            log.critical("Failed to log in (OIDC)")
+            log.critical(la.status_code)
             return
 
 
@@ -101,7 +115,20 @@ def main():
             raise
 
         log.debug("Logging out")
-        s.get(LOGOUT_PAGE)
+        # we get a first page
+        lo = s.get(LOGOUT_PAGE)
+        log.debug(lo.status_code)
+        # which contains an iframe
+        logout = html.fromstring(lo.text).xpath('//iframe')[0]
+        log.debug(logout.attrib.get('src'))
+        p = s.get(logout.attrib.get('src'))
+        log.debug(lr.status_code)
+        # which also has an iframe
+        logout = html.fromstring(p.text).xpath('//iframe')[0]
+        log.debug(logout.attrib.get('src'))
+        f = s.get(logout.attrib.get('src'))
+        log.debug(f.status_code)
+        # and then it is done
 
     log.debug("END: %s" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
