@@ -143,7 +143,20 @@ def main():
                 f.write(mp.text)
 
         log.debug("Logging out")
-        s.get(LOGOUT_PAGE)
+        # we get a first page
+        lo = s.get(LOGOUT_PAGE)
+        log.debug(lo.status_code)
+        # which contains an iframe
+        logout = html.fromstring(lo.text).xpath('//iframe')[0]
+        log.debug(logout.attrib.get('src'))
+        p = s.get(logout.attrib.get('src'))
+        log.debug(lr.status_code)
+        # which also has an iframe
+        logout = html.fromstring(p.text).xpath('//iframe')[0]
+        log.debug(logout.attrib.get('src'))
+        f = s.get(logout.attrib.get('src'))
+        log.debug(f.status_code)
+        # and then it is done
 
     log.debug("END: %s" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
