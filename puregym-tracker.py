@@ -11,7 +11,6 @@ from prometheus_client import CollectorRegistry, Gauge, Summary, push_to_gateway
 
 LOGIN_PAGE      = 'https://www.puregym.com/Login/'
 LOGOUT_PAGE     = 'https://www.puregym.com/logout/'
-LOGIN_API       = 'https://www.puregym.com/api/members/login'
 MEMBERS_PAGE    = 'https://www.puregym.com/members/'
 
 EMAIL       = os.getenv("PUREGYM_EMAIL")
@@ -42,6 +41,7 @@ def main():
     with requests.Session() as s:
 
         log.debug("====== Retrieving login page")
+        ## This will redirect us to a different URL to login
         log.debug(LOGIN_PAGE)
         l = s.get(LOGIN_PAGE)
         log.debug(l.status_code)
@@ -65,10 +65,15 @@ def main():
 
 
         log.debug("====== Logging in")
-        log.debug(LOGIN_API)
-        lr = s.post(LOGIN_API,
-                headers={'__requestverificationtoken': tok},
-                data={'email': EMAIL, 'pin': PIN},
+        # Here we post the data back to the same page
+        # Instead of to a login api
+        log.debug(l.url)
+        lr = s.post(l.url,
+                data={
+                    'username': EMAIL,
+                    'password': PIN,
+                    '__RequestVerificationToken': tok
+                },
             )
         log.debug(lr.status_code)
         if lr.status_code != 200:
