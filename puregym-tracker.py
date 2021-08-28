@@ -80,6 +80,16 @@ def main():
             log.critical("Failed to log in")
             log.critical(lr.status_code)
             return
+        ## OIDC
+        form = html.fromstring(lr.text).forms[0]
+        la = s.post(form.action,
+                data=form.form_values(),
+            )
+        log.debug(la.status_code)
+        if la.status_code != 200:
+            log.critical("Failed to log in (OIDC)")
+            log.critical(la.status_code)
+            return
 
 
         log.debug("======== Retrieving members page")
@@ -128,7 +138,7 @@ def main():
                 raise
 
         else:
-            log.warn("Couldn't identify gym people :(")
+            log.warning("Couldn't identify gym people :(")
             with open(LOGS+'/error_%s.html' % datetime.now(pytz.timezone('Europe/London')).strftime('%Y%m%d%H%M%S'), 'w') as f:
                 f.write(mp.text)
 
